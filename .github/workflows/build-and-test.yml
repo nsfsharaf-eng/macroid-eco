@@ -1,0 +1,26 @@
+name: Build and Test
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    name: Build & Test (macOS)
+    runs-on: macos-14
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Display Swift and Xcode Version
+        run: |
+          swift --version
+          xcodebuild -version || true
+
+      - name: Build Macdroid Mirror
+        run: swift build -c release
+
+      - name: Run Unit Tests
+        run: swift test
