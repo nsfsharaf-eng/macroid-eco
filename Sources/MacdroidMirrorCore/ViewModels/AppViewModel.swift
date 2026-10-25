@@ -111,6 +111,24 @@ public final class AppViewModel: ObservableObject {
         }
     }
 
+    /// Restarts the ADB daemon and refreshes connected devices.
+    public func restartAdbServer() async {
+        guard let adbPath = dependencies.adb.path else {
+            showAlert(message: "Cannot restart ADB daemon: ADB executable path is not resolved.")
+            return
+        }
+
+        isRefreshing = true
+        defer { isRefreshing = false }
+
+        do {
+            try await deviceService.restartServer(adbPath: adbPath)
+            await refreshDevices()
+        } catch {
+            showAlert(message: "Failed to restart ADB daemon: \(error.localizedDescription)")
+        }
+    }
+
     /// Initiates a mirroring session for the selected device.
     public func startMirroring() {
         guard let device = selectedDevice else {

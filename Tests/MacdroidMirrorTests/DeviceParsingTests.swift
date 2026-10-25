@@ -37,7 +37,7 @@ struct DeviceParsingTests {
         #expect(device.connectionType == .usb)
     }
 
-    @Test("Parse multiple devices with varying states")
+    @Test("Parse multiple devices with varying states including offline and unauthorized")
     func parseMultipleDevicesWithDifferentStates() {
         let output = """
         List of devices attached
@@ -46,9 +46,11 @@ struct DeviceParsingTests {
         192.168.1.105:5555     device product:oriole model:Pixel_6 device:oriole transport_id:4
         recovery_device_1      recovery transport_id:5
         bootloader_dev         bootloader transport_id:6
+        sideload_device        sideload transport_id:7
+        HT66S0200001           no permissions (user in plugdev group...); see [http://developer.android.com] usb:1-2
         """
         let devices = DeviceService.parseDeviceList(output: output)
-        #expect(devices.count == 5)
+        #expect(devices.count == 7)
 
         // Device 1: Unauthorized USB
         #expect(devices[0].serialNumber == "0123456789ABCDEF")
@@ -76,6 +78,25 @@ struct DeviceParsingTests {
         // Device 5: Bootloader
         #expect(devices[4].state == .bootloader)
         #expect(!devices[4].state.isUsableForMirroring)
+
+        // Device 6: Sideload
+        #expect(devices[5].state == .sideload)
+        #expect(!devices[5].state.isUsableForMirroring)
+
+        // Device 7: No Permissions
+        #expect(devices[6].serialNumber == "HT66S0200001")
+        #expect(devices[6].state == .noPermissions)
+        #expect(!devices[6].state.isUsableForMirroring)
+    }
+
+    @Test("Parse CRLF formatted output")
+    func parseCrlfLineEndings() {
+        let output = "List of devices attached\r\nSERIAL_CRLF\tdevice product:test model:Test_Phone device:test transport_id:1\r\n"
+        let devices = DeviceService.parseDeviceList(output: output)
+        #expect(devices.count == 1)
+        #expect(devices[0].serialNumber == "SERIAL_CRLF")
+        #expect(devices[0].displayName == "Test Phone")
+        #expect(devices[0].state == .authorized)
     }
 
     @Test("Parse malformed or empty lines safely")
@@ -98,12 +119,11 @@ struct DeviceParsingTests {
         #expect(DeviceState(stateString: "authorizing") == .authorizing)
         #expect(DeviceState(stateString: "recovery") == .recovery)
         #expect(DeviceState(stateString: "bootloader") == .bootloader)
+        #expect(DeviceState(stateString: "sideload") == .sideload)
+        #expect(DeviceState(stateString: "no permissions") == .noPermissions)
 
-        let sideload = DeviceState(stateString: "sideload")
-        #expect(sideload == .unknown("sideload"))
-        #expect(sideload?.rawValue == "sideload")
-        #expect(sideload?.isUsableForMirroring == false)
-
+        #expect(DeviceState(stateString: "sideload")?.rawValue == "sideload")
+        #expect(DeviceState(stateString: "device")?.rawValue == "device")
         #expect(DeviceState(stateString: "invalid") == nil)
     }
 }

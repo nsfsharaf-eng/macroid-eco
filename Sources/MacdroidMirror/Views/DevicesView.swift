@@ -151,10 +151,24 @@ public struct DevicesView: View {
                             .foregroundColor(.secondary)
                     }
                 } else if device.state == .offline {
-                    HStack(spacing: 6) {
+                    HStack(spacing: 8) {
                         Image(systemName: "network.slash")
                             .foregroundColor(AppTheme.statusOffline)
                         Text("Device Offline: Check USB cable or restart ADB daemon.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+
+                        Button("Restart ADB") {
+                            Task { await viewModel.restartAdbServer() }
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                    }
+                } else if device.state == .noPermissions {
+                    HStack(spacing: 6) {
+                        Image(systemName: "exclamationmark.shield.fill")
+                            .foregroundColor(AppTheme.statusError)
+                        Text("No Permissions: USB access denied on macOS.")
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
@@ -199,7 +213,7 @@ public struct DevicesView: View {
         case .authorized: return AppTheme.statusAuthorized
         case .unauthorized, .authorizing: return AppTheme.statusUnauthorized
         case .offline: return AppTheme.statusOffline
-        case .recovery, .bootloader, .unknown: return AppTheme.statusError
+        case .recovery, .bootloader, .sideload, .noPermissions, .unknown: return AppTheme.statusError
         }
     }
 

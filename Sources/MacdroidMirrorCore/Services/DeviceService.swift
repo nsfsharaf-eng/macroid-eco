@@ -1,22 +1,25 @@
 import Foundation
 
 /// Errors originating from the device discovery service.
-public enum DeviceServiceError: LocalizedError, Sendable {
-    case adbNotFound
+public enum DeviceServiceError: LocalizedError, Sendable, Equatable {
+    case adbNotFound(path: String)
     case commandFailed(exitCode: Int32, message: String)
     case parseError(rawOutput: String)
-    case timedOut
+    case timedOut(timeoutSeconds: Double)
+    case daemonStartFailed(message: String)
 
     public var errorDescription: String? {
         switch self {
-        case .adbNotFound:
-            return "ADB executable not found. Please install Android platform-tools or specify the custom path in Settings."
+        case .adbNotFound(let path):
+            return "ADB executable not found at '\(path)'. Please verify Android platform-tools installation or check path in Settings."
         case .commandFailed(let exitCode, let message):
-            return "ADB command failed with exit code \(exitCode): \(message)"
+            return "ADB command failed (exit code \(exitCode)): \(message)"
         case .parseError(let output):
             return "Failed to parse ADB output: \(output)"
-        case .timedOut:
-            return "ADB command timed out while querying connected devices."
+        case .timedOut(let timeout):
+            return "ADB command timed out after \(Int(timeout)) seconds while querying connected devices."
+        case .daemonStartFailed(let message):
+            return "Failed to start ADB daemon: \(message)"
         }
     }
 }
@@ -24,20 +27,26 @@ public enum DeviceServiceError: LocalizedError, Sendable {
 /// Service protocol for Android device discovery.
 public protocol DeviceServicing: Sendable {
     func listDevices(adbPath: String) async throws -> [Device]
+    func restartServer(adbPath: String) async throws
 }
 
 /// Production implementation of DeviceServicing using ADB.
-public final class DeviceService: DeviceServicing {
+public final class DeviceService: DeviceServicing, @unchecked Sendable {
     private let processRunner: ProcessRunning
+    private let isExecutableCheck: @Sendable (String) -> Bool
 
-    public init(processRunner: ProcessRunning = SafeProcessRunner()) {
+    public init(
+        processRunner: ProcessRunning = SafeProcessRunner(),
+        isExecutableCheck: @escaping @Sendable (String) -> Bool = { FileManager.default.isExecutableFile(atPath: $0) }
+    ) {
         self.processRunner = processRunner
+        self.isExecutableCheck = isExecutableCheck
     }
 
     /// Queries `adb devices -l` and returns parsed Device models.
     public func listDevices(adbPath: String) async throws -> [Device] {
-        guard FileManager.default.isExecutableFile(atPath: adbPath) else {
-            throw DeviceServiceError.adbNotFound
+        guard isExecutableCheck(adbPath) else {
+            throw DeviceServiceError.adbNotFound(path: adbPath)
         }
 
         do {
@@ -50,9 +59,15 @@ public final class DeviceService: DeviceServicing {
 
             guard result.isSuccess else {
                 let err = result.standardError.trimmingCharacters(in: .whitespacesAndNewlines)
+                let combined = err.isEmpty ? result.standardOutput.trimmingCharacters(in: .whitespacesAndNewlines) : err
+
+                if combined.contains("daemon not running") && combined.contains("failed") {
+                    throw DeviceServiceError.daemonStartFailed(message: combined)
+                }
+
                 throw DeviceServiceError.commandFailed(
                     exitCode: result.exitCode,
-                    message: err.isEmpty ? "Unknown ADB error" : err
+                    message: combined.isEmpty ? "Unknown ADB error" : combined
                 )
             }
 
@@ -60,14 +75,45 @@ public final class DeviceService: DeviceServicing {
         } catch let err as ProcessRunnerError {
             switch err {
             case .executableNotFound:
-                throw DeviceServiceError.adbNotFound
-            case .executionTimeout:
-                throw DeviceServiceError.timedOut
+                throw DeviceServiceError.adbNotFound(path: adbPath)
+            case .executionTimeout(let timeout):
+                throw DeviceServiceError.timedOut(timeoutSeconds: timeout)
             case .launchFailed(let message):
                 throw DeviceServiceError.commandFailed(exitCode: -1, message: message)
             case .cancelled:
                 return []
             }
+        }
+    }
+
+    /// Restarts the local ADB daemon to recover from stuck connections.
+    public func restartServer(adbPath: String) async throws {
+        guard isExecutableCheck(adbPath) else {
+            throw DeviceServiceError.adbNotFound(path: adbPath)
+        }
+
+        // Kill existing daemon
+        _ = try? await processRunner.run(
+            executablePath: adbPath,
+            arguments: ["kill-server"],
+            environment: nil,
+            timeout: 5.0
+        )
+
+        // Start fresh daemon
+        let startResult = try await processRunner.run(
+            executablePath: adbPath,
+            arguments: ["start-server"],
+            environment: nil,
+            timeout: 8.0
+        )
+
+        guard startResult.isSuccess else {
+            let err = startResult.standardError.trimmingCharacters(in: .whitespacesAndNewlines)
+            throw DeviceServiceError.commandFailed(
+                exitCode: startResult.exitCode,
+                message: err.isEmpty ? "Failed to restart ADB server" : err
+            )
         }
     }
 
@@ -78,12 +124,14 @@ public final class DeviceService: DeviceServicing {
         let lines = output.components(separatedBy: .newlines)
 
         for line in lines {
-            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
 
-            // Skip empty lines, daemon logs, and the header line
+            // Skip empty lines, daemon logs, version mismatches, and header lines
             if trimmed.isEmpty ||
                 trimmed.hasPrefix("*") ||
-                trimmed.hasPrefix("List of devices") {
+                trimmed.hasPrefix("List of devices") ||
+                trimmed.hasPrefix("adb server version") ||
+                trimmed.hasPrefix("cannot connect to daemon") {
                 continue
             }
 
@@ -100,8 +148,19 @@ public final class DeviceService: DeviceServicing {
     /// `RF8M123456X            device usb:1-1 product:starqlteue model:SM_G960U1 device:starqlte transport_id:1`
     /// `0123456789ABCDEF       unauthorized usb:1-2 transport_id:3`
     /// `emulator-5554          offline transport_id:4`
+    /// `HT66S0200001           no permissions (user in plugdev group...); see [url] usb:1-2`
     public static func parseDeviceLine(_ line: String) -> Device? {
-        let tokens = line.split(whereSeparator: { $0.isWhitespace }).map(String.init)
+        let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+
+        // Handle "no permissions" multi-word state
+        if trimmed.contains("no permissions") {
+            let tokens = trimmed.split(whereSeparator: { $0.isWhitespace }).map(String.init)
+            guard let first = tokens.first else { return nil }
+            return Device(serialNumber: first, state: .noPermissions)
+        }
+
+        let tokens = trimmed.split(whereSeparator: { $0.isWhitespace }).map(String.init)
         guard tokens.count >= 2 else { return nil }
 
         let serial = tokens[0]

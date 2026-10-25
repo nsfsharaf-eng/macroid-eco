@@ -213,7 +213,69 @@ public struct OverviewView: View {
                                 .font(.caption2)
                                 .foregroundColor(.secondary)
                         }
+                    } else if device.state == .offline {
+                        Button {
+                            Task { await viewModel.restartAdbServer() }
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: "arrow.clockwise")
+                                Text("Restart ADB")
+                            }
+                            .font(.caption)
+                        }
+                        .buttonStyle(.bordered)
                     }
+                }
+
+                // Detailed guidance alert depending on status
+                if device.state == .unauthorized {
+                    HStack(spacing: 10) {
+                        Image(systemName: "hand.raised.fill")
+                            .foregroundColor(AppTheme.statusUnauthorized)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Unlock your phone to authorize debugging")
+                                .font(.caption)
+                                .fontWeight(.semibold)
+                            Text("A prompt 'Allow USB debugging?' should appear on the phone. Check 'Always allow' and tap 'Allow'. If no prompt appears, toggle USB debugging off and on.")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    .padding(10)
+                    .background(AppTheme.statusUnauthorized.opacity(0.1))
+                    .cornerRadius(AppTheme.cornerRadiusSmall)
+                } else if device.state == .offline {
+                    HStack(spacing: 10) {
+                        Image(systemName: "network.slash")
+                            .foregroundColor(AppTheme.statusOffline)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Device is offline")
+                                .font(.caption)
+                                .fontWeight(.semibold)
+                            Text("The phone is connected but not responding to ADB. Unplug and replug the USB cable, or click 'Restart ADB' above.")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    .padding(10)
+                    .background(AppTheme.statusOffline.opacity(0.1))
+                    .cornerRadius(AppTheme.cornerRadiusSmall)
+                } else if device.state == .noPermissions {
+                    HStack(spacing: 10) {
+                        Image(systemName: "exclamationmark.shield.fill")
+                            .foregroundColor(AppTheme.statusError)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Insufficient USB Permissions")
+                                .font(.caption)
+                                .fontWeight(.semibold)
+                            Text("Your macOS user account lacks permission to communicate with this USB device.")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    .padding(10)
+                    .background(AppTheme.statusError.opacity(0.1))
+                    .cornerRadius(AppTheme.cornerRadiusSmall)
                 }
             } else {
                 HStack {
@@ -364,7 +426,7 @@ public struct OverviewView: View {
         case .authorized: return AppTheme.statusAuthorized
         case .unauthorized, .authorizing: return AppTheme.statusUnauthorized
         case .offline: return AppTheme.statusOffline
-        case .recovery, .bootloader, .unknown: return AppTheme.statusError
+        case .recovery, .bootloader, .sideload, .noPermissions, .unknown: return AppTheme.statusError
         }
     }
 }

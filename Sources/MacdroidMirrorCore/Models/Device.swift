@@ -8,10 +8,13 @@ public enum DeviceState: Hashable, Codable, Sendable {
     case authorizing
     case recovery
     case bootloader
+    case sideload
+    case noPermissions
     case unknown(String)
 
     public init?(stateString: String) {
-        switch stateString.lowercased() {
+        let lower = stateString.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        switch lower {
         case "device":
             self = .authorized
         case "unauthorized":
@@ -25,7 +28,9 @@ public enum DeviceState: Hashable, Codable, Sendable {
         case "bootloader", "fastboot":
             self = .bootloader
         case "sideload":
-            self = .unknown("sideload")
+            self = .sideload
+        case "no permissions", "no_permissions":
+            self = .noPermissions
         default:
             return nil
         }
@@ -47,6 +52,8 @@ public enum DeviceState: Hashable, Codable, Sendable {
         case .authorizing: return "authorizing"
         case .recovery: return "recovery"
         case .bootloader: return "bootloader"
+        case .sideload: return "sideload"
+        case .noPermissions: return "no_permissions"
         case .unknown(let val): return val
         }
     }
@@ -59,6 +66,8 @@ public enum DeviceState: Hashable, Codable, Sendable {
         case .authorizing: return "Authorizing…"
         case .recovery: return "Recovery Mode"
         case .bootloader: return "Bootloader Mode"
+        case .sideload: return "Sideload Mode"
+        case .noPermissions: return "No Permissions"
         case .unknown(let val): return "Unknown (\(val))"
         }
     }
@@ -108,6 +117,10 @@ public struct Device: Identifiable, Hashable, Codable, Sendable {
             return model.replacingOccurrences(of: "_", with: " ")
         }
         return serialNumber
+    }
+
+    public var isUsableForMirroring: Bool {
+        state.isUsableForMirroring
     }
 
     public var secondaryInfo: String {
