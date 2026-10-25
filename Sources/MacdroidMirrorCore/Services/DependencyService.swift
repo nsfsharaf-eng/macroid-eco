@@ -32,11 +32,18 @@ public final class DependencyService: DependencyServicing, @unchecked Sendable {
     ]
 
     public func locateAdb(customPath: String? = nil) async -> DependencyStatus {
-        var candidatePaths: [String] = []
-
-        if let custom = customPath, !custom.trimmingCharacters(in: .whitespaces).isEmpty {
-            candidatePaths.append(custom.trimmingCharacters(in: .whitespaces))
+        if let custom = customPath?.trimmingCharacters(in: .whitespaces), !custom.isEmpty {
+            if fileManager.isExecutableFile(atPath: custom) {
+                let version = await queryVersion(executablePath: custom, versionFlag: "version")
+                return .available(path: custom, version: version)
+            } else if fileManager.fileExists(atPath: custom) {
+                return .permissionDenied(path: custom)
+            } else {
+                return .missing(searchedPaths: [custom])
+            }
         }
+
+        var candidatePaths: [String] = []
 
         // Add PATH lookup candidates if resolved
         if let pathBinary = searchSystemPath(for: "adb") {
@@ -64,11 +71,18 @@ public final class DependencyService: DependencyServicing, @unchecked Sendable {
     }
 
     public func locateScrcpy(customPath: String? = nil) async -> DependencyStatus {
-        var candidatePaths: [String] = []
-
-        if let custom = customPath, !custom.trimmingCharacters(in: .whitespaces).isEmpty {
-            candidatePaths.append(custom.trimmingCharacters(in: .whitespaces))
+        if let custom = customPath?.trimmingCharacters(in: .whitespaces), !custom.isEmpty {
+            if fileManager.isExecutableFile(atPath: custom) {
+                let version = await queryVersion(executablePath: custom, versionFlag: "--version")
+                return .available(path: custom, version: version)
+            } else if fileManager.fileExists(atPath: custom) {
+                return .permissionDenied(path: custom)
+            } else {
+                return .missing(searchedPaths: [custom])
+            }
         }
+
+        var candidatePaths: [String] = []
 
         if let pathBinary = searchSystemPath(for: "scrcpy") {
             if !candidatePaths.contains(pathBinary) {

@@ -37,12 +37,34 @@ struct BinaryInspectorTests {
         #expect(caps.supportsVideoBitRateFlag == false)
     }
 
+    @Test("Parse scrcpy 4.0 current release capabilities")
+    func parseScrcpy40Capabilities() {
+        let raw = """
+        scrcpy 4.0 <https://github.com/Genymobile/scrcpy>
+        Dependencies (compiled / linked):
+         - SDL: 3.4.16 / 3.4.18
+         - libavcodec: 63.1.101 / 63.1.102
+         - libavformat: 63.1.101 / 63.1.102
+         - libavutil: 61.1.101 / 61.1.102
+         - libusb: - / 1.0.30
+        """
+
+        let caps = BinaryInspector.parseScrcpyVersion(raw, architecture: .x86_64)
+        #expect(caps.majorVersion == 4)
+        #expect(caps.minorVersion == 0)
+        #expect(caps.supportsAudioForwarding == true)
+        #expect(caps.supportsVideoBitRateFlag == true)
+        #expect(caps.supportsStayAwake == true)
+        #expect(caps.supportsTurnScreenOff == true)
+        #expect(caps.architecture == .x86_64)
+    }
+
     @Test("Parse ADB version output")
     func parseAdbVersionOutput() {
         let raw = """
         Android Debug Bridge version 1.0.41
-        Version 34.0.5-10900870
-        Installed as /usr/local/bin/adb
+        Version 36.0.2-14143358
+        Installed as /opt/local/bin/adb
         """
 
         let version = BinaryInspector.parseAdbVersion(raw)
@@ -54,9 +76,10 @@ struct BinaryInspectorTests {
         let tempFile = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("test_fat_macho_\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: tempFile) }
 
-        // FAT_MAGIC: 0xcafebabe (big endian)
-        var fatMagic: UInt32 = UInt32(0xcafebabe).bigEndian
-        let data = Data(bytes: &fatMagic, count: 4)
+        // FAT_MAGIC: 0xcafebabe
+        let fatMagic: UInt32 = 0xCAFE_BABE
+        var bigEndianMagic = fatMagic.bigEndian
+        let data = withUnsafeBytes(of: &bigEndianMagic) { Data($0) }
         try data.write(to: tempFile)
 
         let arch = BinaryInspector.inspectArchitecture(atPath: tempFile.path)
@@ -68,11 +91,11 @@ struct BinaryInspectorTests {
         let tempFile = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("test_x86_64_macho_\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: tempFile) }
 
+        var magic: UInt32 = 0xFEED_FACF // MH_MAGIC_64
+        var cpuType: UInt32 = 0x0100_0007 // CPU_TYPE_X86_64
         var header = Data()
-        var magic: UInt32 = 0xfeedfacf // MH_MAGIC_64
-        var cpuType: UInt32 = 0x01000007 // CPU_TYPE_X86_64
-        header.append(Data(bytes: &magic, count: 4))
-        header.append(Data(bytes: &cpuType, count: 4))
+        withUnsafeBytes(of: &magic) { header.append(contentsOf: $0) }
+        withUnsafeBytes(of: &cpuType) { header.append(contentsOf: $0) }
         try header.write(to: tempFile)
 
         let arch = BinaryInspector.inspectArchitecture(atPath: tempFile.path)
