@@ -2,7 +2,7 @@ import Foundation
 import AppKit
 
 /// Errors that can occur during session lifecycle.
-public enum SessionError: LocalizedError, Sendable {
+public enum SessionError: LocalizedError, Sendable, Equatable {
     case deviceNotAuthorized(serial: String, state: DeviceState)
     case scrcpyNotFound(path: String)
     case sessionAlreadyRunning(serial: String)
@@ -31,26 +31,34 @@ public protocol MirroringSessionManaging: AnyObject {
     var state: SessionState { get }
     func startMirroring(device: Device, scrcpyPath: String, adbPath: String?, config: MirroringConfig) throws
     func stopMirroring()
+    func handleDeviceDisconnected(serial: String)
 }
 
-/// Production implementation of MirroringSessionManaging.
+/// Production implementation of MirroringSessionManaging with robust lifecycle and signal management.
 @MainActor
 public final class MirroringSessionManager: ObservableObject, MirroringSessionManaging {
     @Published public private(set) var state: SessionState = .idle
     @Published public private(set) var lastError: String?
 
-    private var activeProcess: Process?
+    private let processFactory: ManagedProcessFactory
+    private let isExecutableCheck: @Sendable (String) -> Bool
+
+    private var activeProcess: ManagedProcess?
     private var activeDeviceSerial: String?
     private var stdoutPipe: Pipe?
     private var stderrPipe: Pipe?
     private var terminationObserver: NSObjectProtocol?
 
-    public init() {
+    public init(
+        processFactory: ManagedProcessFactory = SystemProcessFactory(),
+        isExecutableCheck: @escaping @Sendable (String) -> Bool = { FileManager.default.isExecutableFile(atPath: $0) }
+    ) {
+        self.processFactory = processFactory
+        self.isExecutableCheck = isExecutableCheck
         setupTerminationCleanup()
     }
 
     deinit {
-        // Stop process immediately if manager is deallocated
         if let proc = activeProcess, proc.isRunning {
             proc.terminate()
         }
@@ -79,14 +87,14 @@ public final class MirroringSessionManager: ObservableObject, MirroringSessionMa
         }
 
         // Verify scrcpy executable
-        guard FileManager.default.isExecutableFile(atPath: scrcpyPath) else {
+        guard isExecutableCheck(scrcpyPath) else {
             throw SessionError.scrcpyNotFound(path: scrcpyPath)
         }
 
         state = .starting(deviceId: device.serialNumber)
         lastError = nil
 
-        let process = Process()
+        let process = processFactory.makeProcess()
         process.executableURL = URL(fileURLWithPath: scrcpyPath)
 
         // Build explicit arguments - NO shell interpolation
@@ -99,7 +107,7 @@ public final class MirroringSessionManager: ObservableObject, MirroringSessionMa
         let existingPath = env["PATH"] ?? ""
         env["PATH"] = existingPath.isEmpty ? standardPaths : "\(existingPath):\(standardPaths)"
 
-        if let adb = adbPath, FileManager.default.isExecutableFile(atPath: adb) {
+        if let adb = adbPath, isExecutableCheck(adb) {
             env["ADB"] = adb
             let adbDir = (adb as NSString).deletingLastPathComponent
             env["PATH"] = "\(adbDir):\(env["PATH"] ?? "")"
@@ -154,14 +162,15 @@ public final class MirroringSessionManager: ObservableObject, MirroringSessionMa
         // Clean termination via SIGTERM
         process.terminate()
 
-        // Wait briefly on a background task; if still alive, send SIGKILL
+        // If process is a SystemProcess, escalate to SIGKILL if not dead after 1.5s
         let pid = process.processIdentifier
-        Task.detached(priority: .userInitiated) {
-            try? await Task.sleep(nanoseconds: 1_500_000_000) // 1.5 seconds
-            var status: Int32 = 0
-            if waitpid(pid, &status, WNOHANG) == 0 {
-                // Process is still running, force terminate
-                kill(pid, SIGKILL)
+        if pid > 0, process is SystemProcess {
+            Task.detached(priority: .userInitiated) {
+                try? await Task.sleep(nanoseconds: 1_500_000_000)
+                var status: Int32 = 0
+                if waitpid(pid, &status, WNOHANG) == 0 {
+                    kill(pid, SIGKILL)
+                }
             }
         }
     }
@@ -177,12 +186,13 @@ public final class MirroringSessionManager: ObservableObject, MirroringSessionMa
 
     // MARK: - Private Helpers
 
-    private func handleProcessTermination(process: Process, serial: String) {
+    public func handleProcessTermination(process: ManagedProcess, serial: String) {
         let code = process.terminationStatus
         var errorMessage: String?
 
-        if let stderr = stderrPipe {
-            let data = stderr.fileHandleForReading.readDataToEndOfFile()
+        if process is SystemProcess, let stderr = stderrPipe {
+            try? stderr.fileHandleForWriting.close()
+            let data = (try? stderr.fileHandleForReading.readToEnd()) ?? Data()
             let output = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
             if let output = output, !output.isEmpty {
                 errorMessage = output

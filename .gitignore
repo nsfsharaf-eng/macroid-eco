@@ -6,7 +6,9 @@
 .Spotlight-V100
 .Trashes
 
-# Swift Package Manager & Build Artifacts
+# IDE & Editor Files
+.vscode/
+.idea/
 .build/
 Packages/
 *.xcodeproj/xcuserdata/
