@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -eo pipefail
 
 echo "=========================================="
 echo " Running Macroid Eco Test Suite           "
@@ -23,5 +23,10 @@ if [[ -d "${USR_LIB_DIR}" ]]; then
     )
 fi
 
-swift test "${SWIFT_FLAGS[@]}"
+if [[ ${#SWIFT_FLAGS[@]} -gt 0 ]]; then
+    swift test "${SWIFT_FLAGS[@]}"
+else
+    swift test
+fi
+
 echo "✓ All test suites passed successfully."
