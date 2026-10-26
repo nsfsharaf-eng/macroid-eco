@@ -63,6 +63,7 @@ public final class AppViewModel: ObservableObject {
 
     public let sessionManager: MirroringSessionManager
     public let fileTransferService: FileTransferServicing
+    public let companionSessionManager: CompanionSessionManager
     private let dependencyService: DependencyServicing
     private let deviceService: DeviceServicing
     private let preferencesService: PreferencesServicing
@@ -75,14 +76,24 @@ public final class AppViewModel: ObservableObject {
         deviceService: DeviceServicing = DeviceService(),
         sessionManager: MirroringSessionManager? = nil,
         fileTransferService: FileTransferServicing = FileTransferService(),
-        preferencesService: PreferencesServicing = PreferencesService()
+        preferencesService: PreferencesServicing = PreferencesService(),
+        companionSessionManager: CompanionSessionManager? = nil
     ) {
         self.dependencyService = dependencyService
         self.deviceService = deviceService
         self.sessionManager = sessionManager ?? MirroringSessionManager()
         self.fileTransferService = fileTransferService
         self.preferencesService = preferencesService
+        self.companionSessionManager = companionSessionManager ?? CompanionSessionManager()
         self.config = preferencesService.loadConfig()
+
+        // Forward companion manager changes
+        self.companionSessionManager.objectWillChange
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in
+                self?.objectWillChange.send()
+            }
+            .store(in: &cancellables)
 
         // Synchronize session manager state updates immediately to trigger UI re-renders
         self.sessionManager.$state
@@ -547,5 +558,45 @@ public final class AppViewModel: ObservableObject {
         } catch {
             showAlert(message: "Failed to disconnect: \(error.localizedDescription)")
         }
+    }
+
+    // MARK: - Companion Connection Methods
+
+    /// Connects to the Android companion service over USB via ADB port forwarding
+    public func connectCompanionAdb(serial: String, port: UInt16 = 8275) async {
+        guard let adbPath = dependencies.adb.path else {
+            showAlert(message: "ADB is required for USB Companion transport.")
+            return
+        }
+
+        let transport = AdbBridgeTransport(serial: serial, adbPath: adbPath, localPort: port, remotePort: port)
+        do {
+            if let token = companionSessionManager.savedAuthToken {
+                try await companionSessionManager.authenticate(with: transport, token: token)
+            } else {
+                try await companionSessionManager.startPairing(with: transport)
+            }
+        } catch {
+            showAlert(message: "Companion connection error: \(error.localizedDescription)")
+        }
+    }
+
+    /// Connects to the Android companion service over local Wi-Fi
+    public func connectCompanionWifi(host: String, port: UInt16 = 8275) async {
+        let transport = NetworkSocketTransport(host: host, port: port)
+        do {
+            if let token = companionSessionManager.savedAuthToken {
+                try await companionSessionManager.authenticate(with: transport, token: token)
+            } else {
+                try await companionSessionManager.startPairing(with: transport)
+            }
+        } catch {
+            showAlert(message: "Companion Wi-Fi connection error: \(error.localizedDescription)")
+        }
+    }
+
+    /// Disconnects the active companion session
+    public func disconnectCompanion() async {
+        await companionSessionManager.disconnect()
     }
 }

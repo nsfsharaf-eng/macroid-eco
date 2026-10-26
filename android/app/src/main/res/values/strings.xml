@@ -1,0 +1,18 @@
+<resources>
+    <string name="app_name">Macroid Eco Companion</string>
+    <string name="status_title">Service Status</string>
+    <string name="status_stopped">Companion server is stopped</string>
+    <string name="status_listening">Listening on port 8275 (Ready for Mac)</string>
+    <string name="status_connected">Connected to Macroid Eco for Mac</string>
+    <string name="action_start">Start Service</string>
+    <string name="action_stop">Stop Service</string>
+    <string name="permissions_title">Required Permissions</string>
+    <string name="perm_notification_access">Notification Listener Access</string>
+    <string name="perm_sms_access">SMS &amp; Messaging Permissions</string>
+    <string name="perm_phone_access">Phone State Permissions</string>
+    <string name="grant_permission">Grant</string>
+    <string name="pairing_dialog_title">Pair with Mac?</string>
+    <string name="pairing_dialog_message">Verify that this 6-digit confirmation code matches the one on your Mac:</string>
+    <string name="action_confirm">Confirm Match</string>
+    <string name="action_reject">Reject</string>
+</resources>
