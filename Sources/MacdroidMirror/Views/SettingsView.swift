@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 import MacdroidMirrorCore
 
 public struct SettingsView: View {
@@ -17,7 +18,7 @@ public struct SettingsView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
                 // Header
-                HStack {
+                HStack(alignment: .center) {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Mirroring & Engine Settings")
                             .font(.title2)
@@ -35,8 +36,12 @@ public struct SettingsView: View {
                                 .foregroundColor(AppTheme.statusAuthorized)
                             Text("Saved")
                                 .font(.caption)
+                                .fontWeight(.medium)
                                 .foregroundColor(AppTheme.statusAuthorized)
                         }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .background(Capsule().fill(AppTheme.statusAuthorized.opacity(0.12)))
                         .transition(.opacity)
                     }
 
@@ -80,15 +85,18 @@ public struct SettingsView: View {
 
             VStack(spacing: 16) {
                 // Max Resolution
-                HStack {
+                HStack(alignment: .center) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Max Dimension (Resolution)")
                             .font(.body)
+                            .fontWeight(.medium)
                         Text("Downscales phone video stream to reduce CPU and GPU usage on Intel Macs.")
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
+
                     Spacer()
+
                     Picker("", selection: $localConfig.maxSize) {
                         Text("Native Resolution").tag(0)
                         Text("1080p Max").tag(1080)
@@ -96,22 +104,26 @@ public struct SettingsView: View {
                         Text("1920p Max").tag(1920)
                         Text("720p (Low Power)").tag(720)
                     }
-                    .frame(width: 180)
+                    .labelsHidden()
+                    .frame(width: 200)
                     .onChange(of: localConfig.maxSize) { _ in markDirty() }
                 }
 
                 Divider()
 
                 // Max Framerate
-                HStack {
+                HStack(alignment: .center) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Target Framerate")
                             .font(.body)
+                            .fontWeight(.medium)
                         Text("Limits rendering rate. 60 FPS is optimal for Intel UHD Graphics 630.")
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
+
                     Spacer()
+
                     Picker("", selection: $localConfig.maxFps) {
                         Text("Native / Unlimited").tag(0)
                         Text("60 FPS (Recommended)").tag(60)
@@ -119,25 +131,38 @@ public struct SettingsView: View {
                         Text("90 FPS").tag(90)
                         Text("120 FPS").tag(120)
                     }
-                    .frame(width: 180)
+                    .labelsHidden()
+                    .frame(width: 200)
                     .onChange(of: localConfig.maxFps) { _ in markDirty() }
                 }
 
                 Divider()
 
                 // Bitrate Stepper
-                HStack {
+                HStack(alignment: .center) {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Video Bitrate: \(localConfig.bitRateMbps) Mbps")
+                        Text("Video Bitrate")
                             .font(.body)
+                            .fontWeight(.medium)
                         Text("Higher bitrate improves video clarity at the expense of higher USB bandwidth.")
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
+
                     Spacer()
-                    Stepper("", value: $localConfig.bitRateMbps, in: 2...32, step: 2)
-                        .frame(width: 100)
-                        .onChange(of: localConfig.bitRateMbps) { _ in markDirty() }
+
+                    HStack(spacing: 10) {
+                        Text("\(localConfig.bitRateMbps) Mbps")
+                            .font(.body)
+                            .fontWeight(.semibold)
+                            .foregroundColor(AppTheme.electricBlue)
+                            .frame(width: 80, alignment: .trailing)
+
+                        Stepper("", value: $localConfig.bitRateMbps, in: 2...32, step: 2)
+                            .labelsHidden()
+                    }
+                    .frame(width: 200, alignment: .trailing)
+                    .onChange(of: localConfig.bitRateMbps) { _ in markDirty() }
                 }
             }
         }
@@ -149,56 +174,80 @@ public struct SettingsView: View {
             Text("Display & Session Behavior")
                 .font(.headline)
 
-            VStack(spacing: 14) {
-                Toggle(isOn: $localConfig.stayAwake) {
+            VStack(spacing: 16) {
+                // Stay Awake
+                HStack(alignment: .center) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Stay Awake")
                             .font(.body)
+                            .fontWeight(.medium)
                         Text("Keeps the phone screen awake while mirroring is active.")
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
+                    Spacer()
+                    Toggle("", isOn: $localConfig.stayAwake)
+                        .toggleStyle(.switch)
+                        .labelsHidden()
+                        .onChange(of: localConfig.stayAwake) { _ in markDirty() }
                 }
-                .onChange(of: localConfig.stayAwake) { _ in markDirty() }
 
                 Divider()
 
-                Toggle(isOn: $localConfig.turnScreenOff) {
+                // Turn Physical Screen Off
+                HStack(alignment: .center) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Turn Physical Screen Off")
                             .font(.body)
-                        Text("Turns off the physical device backlight during mirroring to save phone battery.")
+                            .fontWeight(.medium)
+                        Text("Turns off physical phone screen backlight during mirroring to save battery.")
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
+                    Spacer()
+                    Toggle("", isOn: $localConfig.turnScreenOff)
+                        .toggleStyle(.switch)
+                        .labelsHidden()
+                        .onChange(of: localConfig.turnScreenOff) { _ in markDirty() }
                 }
-                .onChange(of: localConfig.turnScreenOff) { _ in markDirty() }
 
                 Divider()
 
-                Toggle(isOn: $localConfig.forwardAudio) {
+                // Forward Audio
+                HStack(alignment: .center) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Forward Audio")
                             .font(.body)
-                        Text("Streams device audio directly to Mac output (requires Android 11+).")
+                            .fontWeight(.medium)
+                        Text("Streams device audio directly to Mac speakers/headphones (requires Android 11+).")
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
+                    Spacer()
+                    Toggle("", isOn: $localConfig.forwardAudio)
+                        .toggleStyle(.switch)
+                        .labelsHidden()
+                        .onChange(of: localConfig.forwardAudio) { _ in markDirty() }
                 }
-                .onChange(of: localConfig.forwardAudio) { _ in markDirty() }
 
                 Divider()
 
-                Toggle(isOn: $localConfig.showTouches) {
+                // Show Finger Touches
+                HStack(alignment: .center) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Show Finger Touches")
                             .font(.body)
-                        Text("Displays physical touch dots on the mirrored screen.")
+                            .fontWeight(.medium)
+                        Text("Displays visual touch indicators on the mirrored screen.")
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
+                    Spacer()
+                    Toggle("", isOn: $localConfig.showTouches)
+                        .toggleStyle(.switch)
+                        .labelsHidden()
+                        .onChange(of: localConfig.showTouches) { _ in markDirty() }
                 }
-                .onChange(of: localConfig.showTouches) { _ in markDirty() }
             }
         }
         .cardStyled()
@@ -209,33 +258,57 @@ public struct SettingsView: View {
             Text("Tool Binary Overrides")
                 .font(.headline)
 
-            VStack(alignment: .leading, spacing: 14) {
-                VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 16) {
+                // ADB Path
+                VStack(alignment: .leading, spacing: 6) {
                     Text("Custom ADB Executable Path")
                         .font(.body)
-                    Text("Leave blank to use automatic search paths (/usr/local/bin, /opt/homebrew/bin, etc.).")
+                        .fontWeight(.medium)
+                    Text("Leave blank to use automatic search paths (/usr/local/bin, /opt/local/bin, /opt/homebrew/bin).")
                         .font(.caption)
                         .foregroundColor(.secondary)
 
-                    TextField("/usr/local/bin/adb", text: $localConfig.customAdbPath)
-                        .textFieldStyle(.roundedBorder)
-                        .font(.system(.body, design: .monospaced))
-                        .onChange(of: localConfig.customAdbPath) { _ in markDirty() }
+                    HStack(spacing: 8) {
+                        TextField("/opt/local/bin/adb", text: $localConfig.customAdbPath)
+                            .textFieldStyle(.roundedBorder)
+                            .font(.system(.body, design: .monospaced))
+                            .onChange(of: localConfig.customAdbPath) { _ in markDirty() }
+
+                        Button("Browse...") {
+                            browseForExecutable { selectedPath in
+                                localConfig.customAdbPath = selectedPath
+                                markDirty()
+                            }
+                        }
+                        .buttonStyle(.bordered)
+                    }
                 }
 
                 Divider()
 
-                VStack(alignment: .leading, spacing: 4) {
+                // scrcpy Path
+                VStack(alignment: .leading, spacing: 6) {
                     Text("Custom scrcpy Executable Path")
                         .font(.body)
+                        .fontWeight(.medium)
                     Text("Leave blank to use automatic search paths.")
                         .font(.caption)
                         .foregroundColor(.secondary)
 
-                    TextField("/usr/local/bin/scrcpy", text: $localConfig.customScrcpyPath)
-                        .textFieldStyle(.roundedBorder)
-                        .font(.system(.body, design: .monospaced))
-                        .onChange(of: localConfig.customScrcpyPath) { _ in markDirty() }
+                    HStack(spacing: 8) {
+                        TextField("/opt/local/bin/scrcpy", text: $localConfig.customScrcpyPath)
+                            .textFieldStyle(.roundedBorder)
+                            .font(.system(.body, design: .monospaced))
+                            .onChange(of: localConfig.customScrcpyPath) { _ in markDirty() }
+
+                        Button("Browse...") {
+                            browseForExecutable { selectedPath in
+                                localConfig.customScrcpyPath = selectedPath
+                                markDirty()
+                            }
+                        }
+                        .buttonStyle(.bordered)
+                    }
                 }
             }
         }
@@ -246,6 +319,19 @@ public struct SettingsView: View {
 
     private func markDirty() {
         hasUnsavedChanges = true
+    }
+
+    private func browseForExecutable(completion: @escaping (String) -> Void) {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        panel.treatsFilePackagesAsDirectories = false
+        panel.prompt = "Select Binary"
+
+        if panel.runModal() == .OK, let url = panel.url {
+            completion(url.path)
+        }
     }
 
     private func save() {

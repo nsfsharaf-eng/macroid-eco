@@ -2,13 +2,13 @@
 import PackageDescription
 
 let package = Package(
-    name: "MacdroidMirror",
+    name: "MacroidEco",
     platforms: [
         .macOS(.v13)
     ],
     products: [
         .executable(
-            name: "MacdroidMirror",
+            name: "MacroidEco",
             targets: ["MacdroidMirror"]
         ),
         .library(

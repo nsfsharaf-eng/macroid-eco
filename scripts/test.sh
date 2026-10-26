@@ -2,7 +2,7 @@
 set -euo pipefail
 
 echo "=========================================="
-echo " Running Macdroid Mirror Test Suite       "
+echo " Running Macroid Eco Test Suite           "
 echo "=========================================="
 
 DEV_DIR="$(xcode-select -p 2>/dev/null || echo '/Library/Developer/CommandLineTools')"

@@ -6,7 +6,7 @@
 .Spotlight-V100
 .Trashes
 
-# IDE & Editor Files
+# IDE, Editor & Tool State
 .vscode/
 .idea/
 .build/
@@ -15,11 +15,17 @@ Packages/
 *.xcworkspace/xcuserdata/
 DerivedData/
 .swiftpm/
+.history/
+*.swp
+*.swo
+*~
+*.bak
 
 # User Local & Environment Overrides
 *.local
 .env
 .env.*
+.gemini/
 
 # Logs & Temporary Files
 *.log

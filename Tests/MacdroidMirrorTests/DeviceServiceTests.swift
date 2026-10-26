@@ -219,4 +219,52 @@ struct DeviceServiceTests {
             Issue.record("Unexpected error: \(error)")
         }
     }
+
+    @Test("Extract IPv4 from standard ip command output lines")
+    func extractIPv4Address() {
+        let wlanLine = "31: wlan2    inet 10.83.113.237/24 brd 10.83.113.255 scope global wlan2\\       valid_lft forever preferred_lft forever"
+        #expect(DeviceService.extractIPv4(from: wlanLine) == "10.83.113.237")
+
+        let loopbackLine = "1: lo    inet 127.0.0.1/8 scope host lo"
+        #expect(DeviceService.extractIPv4(from: loopbackLine) == nil)
+
+        let invalidLine = "garbage text without ip"
+        #expect(DeviceService.extractIPv4(from: invalidLine) == nil)
+    }
+
+    @Test("Enable TCP/IP and Connect Wireless commands")
+    func enableTcpIpAndConnectWireless() async throws {
+        let mockRunner = MockAdbProcessRunner()
+        mockRunner.cannedResults["-s e6ba2153 tcpip 5555"] = ProcessResult(
+            exitCode: 0,
+            standardOutput: "restarting in TCP mode port: 5555\n",
+            standardError: ""
+        )
+        mockRunner.cannedResults["connect 10.83.113.237:5555"] = ProcessResult(
+            exitCode: 0,
+            standardOutput: "connected to 10.83.113.237:5555\n",
+            standardError: ""
+        )
+        mockRunner.cannedResults["disconnect 10.83.113.237:5555"] = ProcessResult(
+            exitCode: 0,
+            standardOutput: "disconnected 10.83.113.237:5555\n",
+            standardError: ""
+        )
+
+        let service = DeviceService(
+            processRunner: mockRunner,
+            isExecutableCheck: { _ in true }
+        )
+
+        try await service.enableTcpIp(adbPath: "/opt/local/bin/adb", serial: "e6ba2153", port: 5555)
+        let target = try await service.connectWireless(adbPath: "/opt/local/bin/adb", ipAddress: "10.83.113.237", port: 5555)
+        #expect(target == "10.83.113.237:5555")
+
+        try await service.disconnectWireless(adbPath: "/opt/local/bin/adb", ipAddress: "10.83.113.237", port: 5555)
+
+        #expect(mockRunner.recordedCalls.count == 3)
+        #expect(mockRunner.recordedCalls[0].arguments == ["-s", "e6ba2153", "tcpip", "5555"])
+        #expect(mockRunner.recordedCalls[1].arguments == ["connect", "10.83.113.237:5555"])
+        #expect(mockRunner.recordedCalls[2].arguments == ["disconnect", "10.83.113.237:5555"])
+    }
 }

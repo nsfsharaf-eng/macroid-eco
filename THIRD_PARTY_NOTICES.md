@@ -1,6 +1,6 @@
 # Third-Party Licenses and Notices
 
-Macdroid Mirror interacts with external open-source utilities to provide device discovery and mirroring functionality. These tools are separate components and retain their respective open-source licenses.
+Macroid Eco interacts with external open-source utilities to provide device discovery, file transfer, and mirroring functionality. These tools are separate components and retain their respective open-source licenses.
 
 ---
 

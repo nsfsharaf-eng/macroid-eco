@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-echo "Building Macdroid Mirror..."
+echo "Building Macroid Eco..."
 swift build -c debug
 
-echo "Launching Macdroid Mirror..."
-exec .build/debug/MacdroidMirror "$@"
+echo "Launching Macroid Eco..."
+exec .build/debug/MacroidEco "$@"

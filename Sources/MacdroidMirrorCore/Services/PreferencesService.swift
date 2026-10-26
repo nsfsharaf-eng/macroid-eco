@@ -10,14 +10,15 @@ public protocol PreferencesServicing: Sendable {
 /// Standard UserDefaults-backed preferences storage using Codable.
 public final class PreferencesService: PreferencesServicing, @unchecked Sendable {
     private let userDefaults: UserDefaults
-    private let storageKey = "com.macdroidmirror.config"
+    private let storageKey = "com.macroideco.config"
+    private let legacyStorageKey = "com.macdroidmirror.config"
 
     public init(userDefaults: UserDefaults = .standard) {
         self.userDefaults = userDefaults
     }
 
     public func loadConfig() -> MirroringConfig {
-        guard let data = userDefaults.data(forKey: storageKey) else {
+        guard let data = userDefaults.data(forKey: storageKey) ?? userDefaults.data(forKey: legacyStorageKey) else {
             return .standard
         }
         do {

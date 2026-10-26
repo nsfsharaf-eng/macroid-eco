@@ -48,6 +48,7 @@ public final class MirroringSessionManager: ObservableObject, MirroringSessionMa
     private var stdoutPipe: Pipe?
     private var stderrPipe: Pipe?
     private var terminationObserver: NSObjectProtocol?
+    private var isIntentionalStop: Bool = false
 
     public init(
         processFactory: ManagedProcessFactory = SystemProcessFactory(),
@@ -145,6 +146,7 @@ public final class MirroringSessionManager: ObservableObject, MirroringSessionMa
 
     /// Stops the active mirroring session cleanly.
     public func stopMirroring() {
+        isIntentionalStop = true
         guard let process = activeProcess, process.isRunning else {
             if let serial = activeDeviceSerial {
                 state = .terminated(deviceId: serial, exitCode: 0, message: "Session closed")
@@ -178,9 +180,10 @@ public final class MirroringSessionManager: ObservableObject, MirroringSessionMa
     /// Notifies the session manager that a device was disconnected from USB.
     public func handleDeviceDisconnected(serial: String) {
         if activeDeviceSerial == serial && state.isActive {
+            isIntentionalStop = false
             stopMirroring()
-            state = .failed(deviceId: serial, error: "Device disconnected from USB")
-            lastError = "Device \(serial) disconnected from USB."
+            state = .failed(deviceId: serial, error: "Device disconnected.")
+            lastError = "Device disconnected."
         }
     }
 
@@ -188,23 +191,30 @@ public final class MirroringSessionManager: ObservableObject, MirroringSessionMa
 
     public func handleProcessTermination(process: ManagedProcess, serial: String) {
         let code = process.terminationStatus
-        var errorMessage: String?
+        let wasIntentional = isIntentionalStop || state.isStopping
+        isIntentionalStop = false
 
+        var stderrLog: String?
         if process is SystemProcess, let stderr = stderrPipe {
             try? stderr.fileHandleForWriting.close()
             let data = (try? stderr.fileHandleForReading.readToEnd()) ?? Data()
             let output = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
             if let output = output, !output.isEmpty {
-                errorMessage = output
+                stderrLog = output
             }
         }
 
-        if code == 0 || code == 15 /* SIGTERM */ {
+        if wasIntentional || code == 0 || code == 15 /* SIGTERM */ || code == 9 /* SIGKILL */ {
             state = .terminated(deviceId: serial, exitCode: code, message: "Mirroring session ended")
+            lastError = nil
         } else {
-            let msg = errorMessage ?? "Process exited with code \(code)"
-            state = .failed(deviceId: serial, error: msg)
-            lastError = msg
+            let isDisconnected = (stderrLog?.localizedCaseInsensitiveContains("device disconnected") == true) ||
+                                (stderrLog?.localizedCaseInsensitiveContains("device not found") == true) ||
+                                (stderrLog?.localizedCaseInsensitiveContains("connection reset") == true)
+
+            let friendlyMessage = isDisconnected ? "Device disconnected." : (stderrLog ?? "Mirroring process ended (exit code \(code)).")
+            state = .failed(deviceId: serial, error: friendlyMessage)
+            lastError = friendlyMessage
         }
 
         cleanupActiveProcess()

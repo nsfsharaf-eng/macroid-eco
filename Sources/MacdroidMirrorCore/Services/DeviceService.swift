@@ -28,6 +28,10 @@ public enum DeviceServiceError: LocalizedError, Sendable, Equatable {
 public protocol DeviceServicing: Sendable {
     func listDevices(adbPath: String) async throws -> [Device]
     func restartServer(adbPath: String) async throws
+    func enableTcpIp(adbPath: String, serial: String, port: Int) async throws
+    func connectWireless(adbPath: String, ipAddress: String, port: Int) async throws -> String
+    func disconnectWireless(adbPath: String, ipAddress: String, port: Int) async throws
+    func queryDeviceWifiIP(adbPath: String, serial: String) async -> String?
 }
 
 /// Production implementation of DeviceServicing using ADB.
@@ -115,6 +119,108 @@ public final class DeviceService: DeviceServicing, @unchecked Sendable {
                 message: err.isEmpty ? "Failed to restart ADB server" : err
             )
         }
+    }
+
+    /// Restarts ADB daemon in TCPIP mode on the specified port (default 5555) for wireless debugging
+    public func enableTcpIp(adbPath: String, serial: String, port: Int = 5555) async throws {
+        guard isExecutableCheck(adbPath) else {
+            throw DeviceServiceError.adbNotFound(path: adbPath)
+        }
+
+        let res = try await processRunner.run(
+            executablePath: adbPath,
+            arguments: ["-s", serial, "tcpip", String(port)],
+            environment: nil,
+            timeout: 10.0
+        )
+
+        guard res.isSuccess else {
+            let msg = res.standardError.isEmpty ? res.standardOutput : res.standardError
+            throw DeviceServiceError.commandFailed(exitCode: res.exitCode, message: "Failed to enable TCP/IP mode: \(msg)")
+        }
+    }
+
+    /// Connects to a device wirelessly via `adb connect <ip>:<port>`
+    public func connectWireless(adbPath: String, ipAddress: String, port: Int = 5555) async throws -> String {
+        guard isExecutableCheck(adbPath) else {
+            throw DeviceServiceError.adbNotFound(path: adbPath)
+        }
+
+        let target = "\(ipAddress):\(port)"
+        let res = try await processRunner.run(
+            executablePath: adbPath,
+            arguments: ["connect", target],
+            environment: nil,
+            timeout: 10.0
+        )
+
+        let output = res.standardOutput.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !res.isSuccess || output.contains("failed") || output.contains("unable") {
+            let err = res.standardError.isEmpty ? output : res.standardError
+            throw DeviceServiceError.commandFailed(exitCode: res.exitCode, message: "Failed to connect to \(target): \(err)")
+        }
+
+        return target
+    }
+
+    /// Disconnects a wireless ADB session via `adb disconnect <ip>:<port>`
+    public func disconnectWireless(adbPath: String, ipAddress: String, port: Int = 5555) async throws {
+        guard isExecutableCheck(adbPath) else {
+            throw DeviceServiceError.adbNotFound(path: adbPath)
+        }
+
+        let target = "\(ipAddress):\(port)"
+        _ = try? await processRunner.run(
+            executablePath: adbPath,
+            arguments: ["disconnect", target],
+            environment: nil,
+            timeout: 5.0
+        )
+    }
+
+    /// Queries the device's local Wi-Fi IPv4 address via ADB shell
+    public func queryDeviceWifiIP(adbPath: String, serial: String) async -> String? {
+        do {
+            let res = try await processRunner.run(
+                executablePath: adbPath,
+                arguments: ["-s", serial, "shell", "ip -o -4 addr show"],
+                environment: nil,
+                timeout: 5.0
+            )
+            guard res.isSuccess else { return nil }
+            let lines = res.standardOutput.components(separatedBy: .newlines)
+            
+            // First pass: Prioritize standard Wi-Fi interfaces (wlan0, wlan1, wlan2, wifi0, etc.)
+            for line in lines {
+                if line.contains("wlan") || line.contains("wifi") {
+                    if let ip = Self.extractIPv4(from: line) {
+                        return ip
+                    }
+                }
+            }
+
+            // Fallback pass: Any valid non-cellular, non-loopback network interface
+            for line in lines {
+                if !line.contains("lo") && !line.contains("rmnet") && !line.contains("p2p") && !line.contains("dummy") {
+                    if let ip = Self.extractIPv4(from: line) {
+                        return ip
+                    }
+                }
+            }
+
+            return nil
+        } catch {
+            return nil
+        }
+    }
+
+    /// Extracts IPv4 address from a standard `ip -o -4 addr show` output line
+    public static func extractIPv4(from line: String) -> String? {
+        let parts = line.split(separator: " ", omittingEmptySubsequences: true)
+        guard let inetIdx = parts.firstIndex(of: "inet"), inetIdx + 1 < parts.count else { return nil }
+        let cidr = String(parts[inetIdx + 1])
+        guard let ip = cidr.components(separatedBy: "/").first, !ip.isEmpty, ip != "127.0.0.1" else { return nil }
+        return ip
     }
 
     /// Parses the raw stdout of `adb devices -l` into strongly-typed `Device` models.

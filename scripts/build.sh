@@ -2,14 +2,14 @@
 set -euo pipefail
 
 echo "=========================================="
-echo " Building Macdroid Mirror (Intel x86_64) "
+echo " Building Macroid Eco (Intel x86_64)      "
 echo "=========================================="
 
 CONFIG="${1:-release}"
 
 swift build -c "${CONFIG}"
 
-BINARY_PATH=".build/${CONFIG}/MacdroidMirror"
+BINARY_PATH=".build/${CONFIG}/MacroidEco"
 
 if [[ -f "${BINARY_PATH}" ]]; then
     echo "✓ Build succeeded: ${BINARY_PATH}"

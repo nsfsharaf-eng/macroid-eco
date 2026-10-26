@@ -14,6 +14,11 @@ public enum SessionState: Hashable, Sendable {
         return false
     }
 
+    public var isStopping: Bool {
+        if case .stopping = self { return true }
+        return false
+    }
+
     public var isTransitioning: Bool {
         switch self {
         case .starting, .stopping: return true

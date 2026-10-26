@@ -1,11 +1,11 @@
-# Contributing to Macdroid Mirror
+# Contributing to Macroid Eco
 
-Thank you for your interest in contributing to Macdroid Mirror!
+Thank you for your interest in contributing to Macroid Eco!
 
 ## Architecture Overview
 
-- **MacdroidMirrorCore**: Shared Swift library containing domain models (`Device`, `SessionState`, `MirroringConfig`, `DependencyStatus`), services (`DeviceService`, `MirroringSessionManager`, `DependencyService`, `PreferencesService`), and `AppViewModel`.
-- **MacdroidMirror**: Native macOS SwiftUI application executable.
+- **MacdroidMirrorCore**: Shared Swift library containing domain models (`Device`, `SessionState`, `MirroringConfig`, `DependencyStatus`, `FileTransfer`), services (`DeviceService`, `MirroringSessionManager`, `FileTransferService`, `DependencyService`, `PreferencesService`), and `AppViewModel`.
+- **MacdroidMirror**: Native macOS SwiftUI application executable (packaged as `Macroid Eco.app`).
 - **MacdroidMirrorTests**: Comprehensive XCTest unit and integration test suite.
 
 ## Development Requirements
@@ -20,10 +20,13 @@ Thank you for your interest in contributing to Macdroid Mirror!
 ### Command Line
 ```bash
 # Build the application
-swift build
+./scripts/build.sh release
 
 # Run unit tests
-swift test
+./scripts/test.sh
+
+# Assemble native macOS application bundle
+./scripts/package_app.sh
 ```
 
 ### Xcode
@@ -35,7 +38,7 @@ open Package.swift
 ## Pull Request Guidelines
 
 1. **Maintain Intel x86_64 Compatibility**:
-   Macdroid Mirror treats Intel Macs as first-class citizens. Avoid Apple-Silicon-only APIs without appropriate availability guards.
+   Macroid Eco treats Intel Macs as first-class citizens. Avoid Apple-Silicon-only APIs without appropriate availability guards.
 2. **Automated Testing**:
    Add unit tests in `Tests/MacdroidMirrorTests/` for any new parsing logic, arguments, or state transitions. Ensure `swift test` passes cleanly.
 3. **No Shell Injections**:

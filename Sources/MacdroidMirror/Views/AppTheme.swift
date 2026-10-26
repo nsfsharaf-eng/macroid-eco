@@ -1,27 +1,51 @@
 import SwiftUI
+import AppKit
 
-/// Design tokens and semantic styling matching Macdroid Mirror design specifications:
-/// Deep navy and graphite foundation with restrained electric-blue accents.
+/// Adaptive design tokens and semantic styling matching native macOS HIG specifications.
+/// Dynamically adjusts between Light Mode and Dark Mode with high contrast and restrained electric-blue accents.
 public struct AppTheme {
-    // MARK: - Foundation Colors
-    public static let navyBackground = Color(red: 10/255, green: 14/255, blue: 24/255)
-    public static let graphiteSurface = Color(red: 20/255, green: 26/255, blue: 38/255)
-    public static let elevatedSurface = Color(red: 28/255, green: 36/255, blue: 52/255)
+    // MARK: - Foundation Semantic Colors (Adaptive Light & Dark)
+    
+    /// Main window content canvas background
+    public static var windowBackground: Color {
+        Color(nsColor: .windowBackgroundColor)
+    }
 
-    // MARK: - Accent Colors
+    /// Card, table, and container surface background
+    public static var surfaceBackground: Color {
+        Color(nsColor: .controlBackgroundColor)
+    }
+
+    /// Secondary elevated card background
+    public static var elevatedSurface: Color {
+        if #available(macOS 14.0, *) {
+            return Color(nsColor: .secondarySystemFill)
+        } else {
+            return Color(nsColor: .controlBackgroundColor).opacity(0.8)
+        }
+    }
+
+    /// Grouped content section background
+    public static var groupedBackground: Color {
+        Color(nsColor: .underPageBackgroundColor)
+    }
+
+    // MARK: - Brand & Accent Colors
     public static let electricBlue = Color(red: 14/255, green: 122/255, blue: 254/255)
-    public static let electricBlueGlow = Color(red: 14/255, green: 122/255, blue: 254/255, opacity: 0.25)
     public static let electricBlueHover = Color(red: 45/255, green: 140/255, blue: 255/255)
 
     // MARK: - Status Semantic Colors
-    public static let statusAuthorized = Color(red: 46/255, green: 204/255, blue: 113/255)
-    public static let statusUnauthorized = Color(red: 243/255, green: 156/255, blue: 18/255)
-    public static let statusOffline = Color(red: 149/255, green: 165/255, blue: 166/255)
-    public static let statusError = Color(red: 231/255, green: 76/255, blue: 60/255)
+    public static let statusAuthorized = Color.green
+    public static let statusUnauthorized = Color.orange
+    public static let statusOffline = Color.secondary
+    public static let statusError = Color.red
 
     // MARK: - Borders & Dividers
-    public static let subtleBorder = Color.white.opacity(0.08)
-    public static let activeBorder = Color(red: 14/255, green: 122/255, blue: 254/255, opacity: 0.5)
+    public static var subtleBorder: Color {
+        Color(nsColor: .separatorColor)
+    }
+
+    public static let activeBorder = Color(red: 14/255, green: 122/255, blue: 254/255, opacity: 0.6)
 
     // MARK: - Corner Radii
     public static let cornerRadiusSmall: CGFloat = 6
@@ -39,12 +63,13 @@ public struct CardBackgroundModifier: ViewModifier {
             .padding()
             .background(
                 RoundedRectangle(cornerRadius: AppTheme.cornerRadiusMedium)
-                    .fill(AppTheme.graphiteSurface)
+                    .fill(AppTheme.surfaceBackground)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: AppTheme.cornerRadiusMedium)
-                    .stroke(isSelected ? AppTheme.activeBorder : AppTheme.subtleBorder, lineWidth: 1)
+                    .stroke(isSelected ? AppTheme.activeBorder : AppTheme.subtleBorder, lineWidth: isSelected ? 1.5 : 1)
             )
+            .shadow(color: Color.black.opacity(0.04), radius: 2, x: 0, y: 1)
     }
 }
 

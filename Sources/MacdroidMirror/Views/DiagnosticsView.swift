@@ -276,7 +276,7 @@ public struct DiagnosticsView: View {
         let osVer = ProcessInfo.processInfo.operatingSystemVersionString
         let mem = Double(ProcessInfo.processInfo.physicalMemory) / (1024 * 1024 * 1024)
         let report = """
-        === Macdroid Mirror Diagnostic Report ===
+        === Macroid Eco Diagnostic Report ===
         OS: \(osVer)
         Architecture: x86_64
         Memory: \(String(format: "%.1f GB", mem))

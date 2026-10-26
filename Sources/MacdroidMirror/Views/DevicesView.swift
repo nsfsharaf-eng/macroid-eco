@@ -37,8 +37,10 @@ public struct DevicesView: View {
                 }
 
                 if viewModel.devices.isEmpty {
+                    wirelessDebuggingCard
                     emptyDevicesView
                 } else {
+                    wirelessDebuggingCard
                     deviceListView
                 }
             }
@@ -47,6 +49,107 @@ public struct DevicesView: View {
     }
 
     // MARK: - Subviews
+
+    private var wirelessDebuggingCard: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                HStack(spacing: 8) {
+                    Image(systemName: "wifi")
+                        .foregroundColor(AppTheme.electricBlue)
+                        .font(.headline)
+                    Text("Wireless Debugging (Wi-Fi)")
+                        .font(.headline)
+                }
+
+                Spacer()
+
+                if viewModel.isConnectingWireless {
+                    ProgressView()
+                        .controlSize(.small)
+                }
+            }
+
+            // One-Click Switch from USB Banner (if USB device attached)
+            if let usbDevice = viewModel.devices.first(where: { $0.connectionType == .usb && $0.state.isUsableForMirroring }) {
+                HStack(spacing: 12) {
+                    Image(systemName: "bolt.fill")
+                        .foregroundColor(AppTheme.electricBlue)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("USB Device Ready: \(usbDevice.displayName)")
+                            .font(.callout)
+                            .fontWeight(.semibold)
+                        Text("Switch to Wireless with 1 click without typing commands.")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                    Spacer()
+                    Button("Switch to Wireless") {
+                        Task { await viewModel.enableWirelessDebugging(for: usbDevice) }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(AppTheme.electricBlue)
+                    .controlSize(.small)
+                    .disabled(viewModel.isConnectingWireless)
+                }
+                .padding(10)
+                .background(
+                    RoundedRectangle(cornerRadius: AppTheme.cornerRadiusSmall)
+                        .fill(AppTheme.electricBlue.opacity(0.1))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: AppTheme.cornerRadiusSmall)
+                        .stroke(AppTheme.electricBlue.opacity(0.3), lineWidth: 1)
+                )
+            }
+
+            // Direct IP Connect Guide & Inputs
+            VStack(alignment: .leading, spacing: 10) {
+                VStack(alignment: .leading, spacing: 6) {
+                    guideStepRow(number: "1", text: "Make sure both your phone and Mac are connected to the same Wi-Fi network.")
+                    guideStepRow(number: "2", text: "Find phone IP in Settings > About Phone > Status > IP address (e.g. 192.168.1.100).")
+                    guideStepRow(number: "3", text: "Enter the IP address and port (default 5555), then click 'Connect Wi-Fi'.")
+                }
+                .padding(10)
+                .background(
+                    RoundedRectangle(cornerRadius: AppTheme.cornerRadiusSmall)
+                        .fill(AppTheme.elevatedSurface.opacity(0.35))
+                )
+
+                HStack(spacing: 10) {
+                    TextField("Phone IP address (e.g. 192.168.1.100)", text: $viewModel.manualWirelessIP)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(minWidth: 240)
+
+                    TextField("Port", text: $viewModel.manualWirelessPort)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 75)
+
+                    Button {
+                        let port = Int(viewModel.manualWirelessPort) ?? 5555
+                        Task { await viewModel.connectManualWireless(ipAddress: viewModel.manualWirelessIP, port: port) }
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "link")
+                            Text("Connect Wi-Fi")
+                        }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(AppTheme.electricBlue)
+                    .disabled(viewModel.manualWirelessIP.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || viewModel.isConnectingWireless)
+                }
+            }
+
+            if let msg = viewModel.wirelessStatusMessage {
+                HStack(spacing: 6) {
+                    Image(systemName: msg.contains("failed") || msg.contains("Could not") ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
+                    Text(msg)
+                }
+                .font(.caption)
+                .foregroundColor(msg.contains("failed") || msg.contains("Could not") ? AppTheme.statusError : AppTheme.statusAuthorized)
+            }
+        }
+        .cardStyled()
+    }
 
     private var deviceListView: some View {
         VStack(spacing: 14) {
@@ -142,6 +245,29 @@ public struct DevicesView: View {
                     .buttonStyle(.borderedProminent)
                     .tint(AppTheme.electricBlue)
                     .disabled(!viewModel.dependencies.scrcpy.isAvailable)
+
+                    if device.connectionType == .usb {
+                        Button {
+                            Task { await viewModel.enableWirelessDebugging(for: device) }
+                        } label: {
+                            HStack(spacing: 6) {
+                                Image(systemName: "wifi")
+                                Text("Switch to Wireless")
+                            }
+                        }
+                        .buttonStyle(.bordered)
+                        .disabled(viewModel.isConnectingWireless)
+                    } else if device.connectionType == .tcpip {
+                        Button(role: .destructive) {
+                            Task { await viewModel.disconnectWireless(for: device) }
+                        } label: {
+                            HStack(spacing: 6) {
+                                Image(systemName: "wifi.slash")
+                                Text("Disconnect Wi-Fi")
+                            }
+                        }
+                        .buttonStyle(.bordered)
+                    }
                 } else if device.state == .unauthorized {
                     HStack(spacing: 6) {
                         Image(systemName: "hand.raised.fill")
@@ -243,5 +369,22 @@ public struct DevicesView: View {
         .frame(maxWidth: .infinity)
         .padding(.vertical, 40)
         .cardStyled()
+    }
+
+    private func guideStepRow(number: String, text: String) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            Text(number)
+                .font(.caption2)
+                .fontWeight(.bold)
+                .frame(width: 18, height: 18)
+                .background(Circle().fill(AppTheme.electricBlue.opacity(0.18)))
+                .foregroundColor(AppTheme.electricBlue)
+                .padding(.top, 1)
+
+            Text(text)
+                .font(.caption)
+                .foregroundColor(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
     }
 }

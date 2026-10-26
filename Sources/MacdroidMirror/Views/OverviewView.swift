@@ -332,7 +332,7 @@ public struct OverviewView: View {
                 .padding(10)
                 .background(
                     RoundedRectangle(cornerRadius: AppTheme.cornerRadiusSmall)
-                        .fill(viewModel.selectedDevice?.id == device.id ? AppTheme.elevatedSurface : AppTheme.graphiteSurface)
+                        .fill(viewModel.selectedDevice?.id == device.id ? AppTheme.elevatedSurface : AppTheme.surfaceBackground)
                 )
                 .contentShape(Rectangle())
                 .onTapGesture {
