@@ -30,3 +30,12 @@ DerivedData/
 # Logs & Temporary Files
 *.log
 *.tmp
+
+# Android Build Outputs & Local State
+.gradle/
+build/
+android/.gradle/
+android/app/build/
+android/local.properties
+*.apk
+*.aab
